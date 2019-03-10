@@ -17,14 +17,15 @@ func (c *Client) Do(req *http.Request) (*http.Response, error)  {
 
 func (c *Client) AsyncDo(req *http.Request) *resultHolder {
 	holder := &resultHolder{
-		res:   make(chan *http.Response),
-		err:   make(chan error),
-		state: resultIdle,
+		result: make(chan *HttpResponse),
+		state:  resultIdle,
 	}
 	go func() {
 		r, e := c.http.Do(req)
-		holder.res <- r
-		holder.err <- e
+		holder.result <- &HttpResponse{
+			resp:r,
+			err:e,
+		}
 	}()
 
 	return holder

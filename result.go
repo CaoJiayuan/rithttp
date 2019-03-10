@@ -1,6 +1,8 @@
 package rithttp
 
-import "net/http"
+import (
+	"net/http"
+)
 
 type ResponseResolver func(response *http.Response)
 type ErrorResolver func(err error)
@@ -11,10 +13,15 @@ const (
 	resultResolved
 )
 
+type HttpResponse struct {
+	resp *http.Response
+	err error
+}
+
 type resultHolder struct {
-	res chan *http.Response
-	err chan error
-	state int
+	result     chan *HttpResponse
+	response   *HttpResponse
+	state      int
 	errorState int
 }
 
@@ -22,6 +29,7 @@ func (r *resultHolder) Then(resolver ResponseResolver) *resultHolder {
 	if r.state != resultIdle {
 		return r
 	}
+	r.resolve()
 
 	r.state = resultResolving
 	func(res *http.Response) {
@@ -31,15 +39,23 @@ func (r *resultHolder) Then(resolver ResponseResolver) *resultHolder {
 			}()
 			resolver(res)
 		}
-	}(<-r.res)
+	}(r.response.resp)
 	return r
+}
+
+func (r *resultHolder) resolve()  {
+	if r.response == nil {
+		r.response = <- r.result
+	}
 }
 
 func (r *resultHolder) Catch(resolver ErrorResolver) *resultHolder {
 	if r.errorState != resultIdle {
 		return r
 	}
+	r.resolve()
 	r.errorState = resultResolving
+	e := r.response.err
 	func(err error) {
 		if err != nil {
 			defer func() {
@@ -47,6 +63,7 @@ func (r *resultHolder) Catch(resolver ErrorResolver) *resultHolder {
 			}()
 			resolver(err)
 		}
-	}(<-r.err)
+	}(e)
+
 	return r
 }
