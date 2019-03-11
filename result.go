@@ -49,10 +49,6 @@ func (r *resultHolder) resolve()  {
 	}
 }
 
-func (r *resultHolder) GetResult() chan *HttpResponse{
-	return r.result
-}
-
 func (r *resultHolder) GetResponse() *http.Response {
 	r.resolve()
 	return r.response.resp
