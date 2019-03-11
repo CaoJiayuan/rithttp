@@ -49,6 +49,20 @@ func (r *resultHolder) resolve()  {
 	}
 }
 
+func (r *resultHolder) GetResult() chan *HttpResponse{
+	return r.result
+}
+
+func (r *resultHolder) GetResponse() *http.Response {
+	r.resolve()
+	return r.response.resp
+}
+
+func (r *resultHolder) GetError() error {
+	r.resolve()
+	return r.response.err
+}
+
 func (r *resultHolder) Catch(resolver ErrorResolver) *resultHolder {
 	if r.errorState != resultIdle {
 		return r
