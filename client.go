@@ -8,6 +8,12 @@ import (
 type ConfigInterceptor func(client *http.Client)
 type RequestInterceptor func(req *http.Request)
 
+var (
+	PresetUserAgent = "RithHttp/1.0 (go )"
+	PresetHeader = http.Header{
+		"User-Agent" : []string{PresetUserAgent},
+	}
+)
 
 type Client struct {
 	http              *http.Client
@@ -59,6 +65,9 @@ func (c *Client) bootRequest(req *http.Request) {
 
 	if c.requestInterceptor != nil {
 		c.requestInterceptor(req)
+		if len(req.Header) == 0 {
+			req.Header = PresetHeader
+		}
 	}
 }
 
