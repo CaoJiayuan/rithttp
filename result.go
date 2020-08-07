@@ -1,71 +1,88 @@
 package rithttp
 
 import (
+	"encoding/json"
+	"io/ioutil"
 	"net/http"
 )
 
-type ResponseResolver func(response *http.Response)
+type ResponseResolver func(response *HttpResponse)
 type ErrorResolver func(err error)
 
 const (
-	resultIdle                  = iota
+	resultIdle = iota
 	resultResolving
 	resultResolved
 )
 
 type HttpResponse struct {
-	resp *http.Response
-	err error
+	Response *http.Response
+	Err      error
 }
 
-type resultHolder struct {
+func (r *HttpResponse) UnmarshalJson(v interface{}) error {
+	b, e := ioutil.ReadAll(r.Response.Body)
+
+	if e != nil {
+		return e
+	}
+
+	err := json.Unmarshal(b, v)
+
+	return err
+}
+
+func (r *HttpResponse) IsSuccessful() bool {
+	return r.Response.StatusCode == 200
+}
+
+func (r *HttpResponse) ReadBody() ([]byte, error) {
+	return ioutil.ReadAll(r.Response.Body)
+}
+
+type ResultHolder struct {
 	result     chan *HttpResponse
 	response   *HttpResponse
 	state      int
 	errorState int
 }
 
-func (r *resultHolder) Then(resolver ResponseResolver) *resultHolder {
+func (r *ResultHolder) Then(resolver ResponseResolver) *ResultHolder {
 	if r.state != resultIdle {
 		return r
 	}
 	r.resolve()
 
 	r.state = resultResolving
-	func(res *http.Response) {
+	func(res *HttpResponse) {
 		if res != nil {
 			defer func() {
 				r.state = resultResolved
 			}()
 			resolver(res)
 		}
-	}(r.response.resp)
+	}(r.response)
 	return r
 }
 
-func (r *resultHolder) resolve()  {
+func (r *ResultHolder) resolve() {
 	if r.response == nil {
-		r.response = <- r.result
+		r.response = <-r.result
 	}
 }
 
-func (r *resultHolder) GetResponse() *http.Response {
+func (r *ResultHolder) GetResponse() *HttpResponse {
 	r.resolve()
-	return r.response.resp
+	return r.response
 }
 
-func (r *resultHolder) GetError() error {
-	r.resolve()
-	return r.response.err
-}
-
-func (r *resultHolder) Catch(resolver ErrorResolver) *resultHolder {
+func (r *ResultHolder) Catch(resolver ErrorResolver) *ResultHolder {
 	if r.errorState != resultIdle {
 		return r
 	}
 	r.resolve()
 	r.errorState = resultResolving
-	e := r.response.err
+	e := r.response.Err
 	func(err error) {
 		if err != nil {
 			defer func() {

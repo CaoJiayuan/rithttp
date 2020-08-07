@@ -9,15 +9,15 @@ type ConfigInterceptor func(client *http.Client)
 type RequestInterceptor func(req *http.Request)
 
 var (
-	PresetUserAgent = "RithHttp/1.0 (go )"
-	PresetHeader = http.Header{
-		"User-Agent" : []string{PresetUserAgent},
+	PresetUserAgent = "RithHttp/1.0"
+	PresetHeader    = http.Header{
+		"User-Agent": []string{PresetUserAgent},
 	}
 )
 
 type Client struct {
-	http              *http.Client
-	configInterceptor ConfigInterceptor
+	http               *http.Client
+	configInterceptor  ConfigInterceptor
 	requestInterceptor RequestInterceptor
 }
 
@@ -31,22 +31,22 @@ func (c *Client) OnRequest(on RequestInterceptor) *Client {
 	return c
 }
 
-func (c *Client) Do(req *http.Request) (*http.Response, error)  {
+func (c *Client) Do(req *http.Request) (*http.Response, error) {
 	c.bootRequest(req)
 	return c.http.Do(req)
 }
 
-func (c *Client) AsyncDo(req *http.Request) *resultHolder {
+func (c *Client) AsyncDo(req *http.Request) *ResultHolder {
 	c.bootRequest(req)
-	holder := &resultHolder{
+	holder := &ResultHolder{
 		result: make(chan *HttpResponse),
 		state:  resultIdle,
 	}
 	go func() {
 		r, e := c.http.Do(req)
 		holder.result <- &HttpResponse{
-			resp:r,
-			err:e,
+			Response: r,
+			Err:      e,
 		}
 	}()
 
