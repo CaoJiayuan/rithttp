@@ -40,57 +40,94 @@ func (r *HttpResponse) ReadBody() ([]byte, error) {
 	return ioutil.ReadAll(r.Response.Body)
 }
 
-type ResultHolder struct {
+type Holder struct {
+	req        *http.Request
 	result     chan *HttpResponse
 	response   *HttpResponse
+	client     *Client
 	state      int
 	errorState int
+	sdr        *SimpleDelayRequest
 }
 
-func (r *ResultHolder) Then(resolver ResponseResolver) *ResultHolder {
-	if r.state != resultIdle {
-		return r
+func (h *Holder) Then(resolver ResponseResolver) *Holder {
+	if h.state != resultIdle {
+		return h
 	}
-	r.resolve()
-
-	r.state = resultResolving
+	h.do().wait()
+	h.state = resultResolving
 	func(res *HttpResponse) {
 		if res != nil {
 			defer func() {
-				r.state = resultResolved
+				h.state = resultResolved
 			}()
 			resolver(res)
 		}
-	}(r.response)
-	return r
+	}(h.response)
+	return h
 }
 
-func (r *ResultHolder) resolve() {
-	if r.response == nil {
-		r.response = <-r.result
+func (h *Holder) Chain() *SimpleDelayRequest {
+	if h.sdr != nil {
+		return h.sdr
+	}
+	h.sdr = &SimpleDelayRequest{
+		h.req,
+	}
+	return h.sdr
+}
+
+func (h *Holder) do() *Holder {
+
+	go func() {
+		r, e := h.client.http.Do(h.Chain().Request)
+		h.result <- &HttpResponse{
+			Response: r,
+			Err:      e,
+		}
+	}()
+	return h
+}
+
+func (h *Holder) wait() {
+	if h.response == nil {
+		h.response = <-h.result
 	}
 }
 
-func (r *ResultHolder) GetResponse() *HttpResponse {
-	r.resolve()
-	return r.response
+func (h *Holder) GetResponse() *HttpResponse {
+	h.wait()
+	return h.response
 }
 
-func (r *ResultHolder) Catch(resolver ErrorResolver) *ResultHolder {
-	if r.errorState != resultIdle {
-		return r
+func (h *Holder) Catch(resolver ErrorResolver) *Holder {
+	if h.errorState != resultIdle {
+		return h
 	}
-	r.resolve()
-	r.errorState = resultResolving
-	e := r.response.Err
+	h.wait()
+	h.errorState = resultResolving
+	e := h.response.Err
 	func(err error) {
 		if err != nil {
 			defer func() {
-				r.errorState = resultResolved
+				h.errorState = resultResolved
 			}()
 			resolver(err)
 		}
 	}(e)
 
-	return r
+	return h
+}
+
+type SimpleDelayRequest struct {
+	*http.Request
+}
+
+func (sdr *SimpleDelayRequest) SetHeader(key, value string) *SimpleDelayRequest {
+	sdr.Header.Set(key, value)
+	return sdr
+}
+
+func (sdr *SimpleDelayRequest) do() {
+
 }

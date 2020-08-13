@@ -31,24 +31,29 @@ func (c *Client) OnRequest(on RequestInterceptor) *Client {
 	return c
 }
 
-func (c *Client) Do(req *http.Request) (*http.Response, error) {
-	c.bootRequest(req)
-	return c.http.Do(req)
+func (c *Client) Get(url string) {
+
 }
 
-func (c *Client) AsyncDo(req *http.Request) *ResultHolder {
+func (c *Client) Chain() {
+
+}
+
+func (c *Client) Do(req *http.Request) (*http.Response, error) {
 	c.bootRequest(req)
-	holder := &ResultHolder{
+	holder := c.AsyncDo(req)
+	resp := holder.GetResponse()
+	return resp.Response, resp.Err
+}
+
+func (c *Client) AsyncDo(req *http.Request) *Holder {
+	c.bootRequest(req)
+	holder := &Holder{
 		result: make(chan *HttpResponse),
 		state:  resultIdle,
+		client: c,
+		req:    req,
 	}
-	go func() {
-		r, e := c.http.Do(req)
-		holder.result <- &HttpResponse{
-			Response: r,
-			Err:      e,
-		}
-	}()
 
 	return holder
 }
@@ -58,9 +63,10 @@ func (c *Client) bootRequest(req *http.Request) {
 		c.http = &http.Client{
 			Timeout: 5 * time.Second,
 		}
-	}
-	if c.configInterceptor != nil {
-		c.configInterceptor(c.http)
+		// run config interceptor before first request
+		if c.configInterceptor != nil {
+			c.configInterceptor(c.http)
+		}
 	}
 
 	if c.requestInterceptor != nil {
