@@ -1,6 +1,7 @@
 package rithttp
 
 import (
+	"bytes"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
@@ -33,10 +34,11 @@ func (r *HttpResponse) UnmarshalJson(v interface{}) error {
 }
 
 func (r *HttpResponse) IsSuccessful() bool {
-	return r.Response.StatusCode == 200
+	return r.Err == nil && r.Response.StatusCode == 200
 }
 
 func (r *HttpResponse) ReadBody() ([]byte, error) {
+	defer r.Response.Body.Close()
 	return ioutil.ReadAll(r.Response.Body)
 }
 
@@ -48,6 +50,7 @@ type Holder struct {
 	state      int
 	errorState int
 	sdr        *SimpleDelayRequest
+	requested  bool
 }
 
 func (h *Holder) Then(resolver ResponseResolver) *Holder {
@@ -72,13 +75,18 @@ func (h *Holder) Chain() *SimpleDelayRequest {
 		return h.sdr
 	}
 	h.sdr = &SimpleDelayRequest{
-		h.req,
+		Request: h.req,
+		holder:  h,
 	}
 	return h.sdr
 }
 
 func (h *Holder) do() *Holder {
+	if h.requested {
+		return h
+	}
 
+	h.requested = true
 	go func() {
 		r, e := h.client.http.Do(h.Chain().Request)
 		h.result <- &HttpResponse{
@@ -121,6 +129,7 @@ func (h *Holder) Catch(resolver ErrorResolver) *Holder {
 
 type SimpleDelayRequest struct {
 	*http.Request
+	holder *Holder
 }
 
 func (sdr *SimpleDelayRequest) SetHeader(key, value string) *SimpleDelayRequest {
@@ -128,6 +137,37 @@ func (sdr *SimpleDelayRequest) SetHeader(key, value string) *SimpleDelayRequest 
 	return sdr
 }
 
-func (sdr *SimpleDelayRequest) do() {
+func (sdr *SimpleDelayRequest) AddHeader(key, value string) *SimpleDelayRequest {
+	sdr.Header.Add(key, value)
+	return sdr
+}
 
+func (sdr *SimpleDelayRequest) Json(marshaler json.Marshaler) *SimpleDelayRequest {
+	sdr.Header.Set("Content-Type", "application/json")
+
+	b, _ := marshaler.MarshalJSON()
+
+	sdr.Body = &JsonBody{bytes.NewBuffer(b)}
+	return sdr
+}
+
+func (sdr *SimpleDelayRequest) SimpleJson(j map[string]interface{}) *SimpleDelayRequest {
+	sdr.Header.Set("Content-Type", "application/json")
+
+	b, _ := json.Marshal(j)
+
+	sdr.Body = &JsonBody{bytes.NewBuffer(b)}
+	return sdr
+}
+
+func (sdr *SimpleDelayRequest) Then(resolver ResponseResolver) *Holder {
+	return sdr.holder.Then(resolver)
+}
+
+type JsonBody struct {
+	*bytes.Buffer
+}
+
+func (j JsonBody) Close() error {
+	return nil
 }

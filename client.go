@@ -35,24 +35,24 @@ func (c *Client) Get(url string) {
 
 }
 
-func (c *Client) Chain() {
-
-}
-
-func (c *Client) Do(req *http.Request) (*http.Response, error) {
+func (c *Client) Do(req *http.Request) *HttpResponse {
 	c.bootRequest(req)
-	holder := c.AsyncDo(req)
+	holder := c.AsyncDo(req, true)
 	resp := holder.GetResponse()
-	return resp.Response, resp.Err
+	return resp
 }
 
-func (c *Client) AsyncDo(req *http.Request) *Holder {
+func (c *Client) AsyncDo(req *http.Request, now ...bool) *Holder {
 	c.bootRequest(req)
 	holder := &Holder{
 		result: make(chan *HttpResponse),
 		state:  resultIdle,
 		client: c,
 		req:    req,
+	}
+
+	if len(now) > 0 && now[0] {
+		holder.do()
 	}
 
 	return holder
