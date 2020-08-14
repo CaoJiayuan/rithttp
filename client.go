@@ -2,6 +2,8 @@ package rithttp
 
 import (
 	"net/http"
+	"net/url"
+	"runtime"
 	"time"
 )
 
@@ -9,11 +11,12 @@ type ConfigInterceptor func(client *http.Client)
 type RequestInterceptor func(req *http.Request)
 
 var (
-	PresetUserAgent = "RithHttp/1.0"
-	PresetHeader    = http.Header{
-		"User-Agent": []string{PresetUserAgent},
-	}
+	version = "0.0.1"
 )
+
+func UserAgent() string {
+	return "RithHttp/" + version + " (" + runtime.Version() + ")"
+}
 
 type Client struct {
 	http               *http.Client
@@ -31,8 +34,35 @@ func (c *Client) OnRequest(on RequestInterceptor) *Client {
 	return c
 }
 
-func (c *Client) Get(url string) {
+func (c *Client) Get(url string, query ...url.Values) (*HttpResponse, error) {
+	req, err := http.NewRequest("GET", url, nil)
 
+	if err != nil {
+		return nil, err
+	}
+
+	if len(query) > 0 {
+		q := req.URL.Query()
+		for k, v := range query[0] {
+			for _, s := range v {
+				q.Add(k, s)
+			}
+		}
+
+		req.URL.RawQuery = q.Encode()
+	}
+
+	return c.Do(req), nil
+}
+
+func (c *Client) Request(method, url string, now ...bool) (*Holder, error) {
+	req, err := http.NewRequest(method, url, nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return c.AsyncDo(req, now...), nil
 }
 
 func (c *Client) Do(req *http.Request) *HttpResponse {
@@ -71,10 +101,9 @@ func (c *Client) bootRequest(req *http.Request) {
 
 	if c.requestInterceptor != nil {
 		c.requestInterceptor(req)
-		if len(req.Header) == 0 {
-			req.Header = PresetHeader
-		}
 	}
+
+	req.Header.Set("User-Agent", UserAgent())
 }
 
 func NewClient() *Client {

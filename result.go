@@ -8,6 +8,7 @@ import (
 )
 
 type ResponseResolver func(response *HttpResponse)
+type RequestResolver func(request *SimpleDelayRequest)
 type ErrorResolver func(err error)
 
 const (
@@ -81,6 +82,11 @@ func (h *Holder) Chain() *SimpleDelayRequest {
 	return h.sdr
 }
 
+func (h *Holder) Before(resolver RequestResolver) *Holder {
+	resolver(h.Chain())
+	return h
+}
+
 func (h *Holder) do() *Holder {
 	if h.requested {
 		return h
@@ -147,16 +153,23 @@ func (sdr *SimpleDelayRequest) Json(marshaler json.Marshaler) *SimpleDelayReques
 
 	b, _ := marshaler.MarshalJSON()
 
-	sdr.Body = &JsonBody{bytes.NewBuffer(b)}
+	body := &RequestBody{bytes.NewBuffer(b)}
+	sdr.Body = body
+	sdr.ContentLength = int64(body.Len())
 	return sdr
 }
 
 func (sdr *SimpleDelayRequest) SimpleJson(j map[string]interface{}) *SimpleDelayRequest {
-	sdr.Header.Set("Content-Type", "application/json")
+	return sdr.Json(SimpleJsonMarshaler{j})
+}
 
-	b, _ := json.Marshal(j)
+func (sdr *SimpleDelayRequest) SetQuery(key, value string) *SimpleDelayRequest {
+	q := sdr.URL.Query()
 
-	sdr.Body = &JsonBody{bytes.NewBuffer(b)}
+	q.Set(key, value)
+
+	sdr.URL.RawQuery = q.Encode()
+
 	return sdr
 }
 
@@ -164,10 +177,18 @@ func (sdr *SimpleDelayRequest) Then(resolver ResponseResolver) *Holder {
 	return sdr.holder.Then(resolver)
 }
 
-type JsonBody struct {
+type RequestBody struct {
 	*bytes.Buffer
 }
 
-func (j JsonBody) Close() error {
+func (j RequestBody) Close() error {
 	return nil
+}
+
+type SimpleJsonMarshaler struct {
+	v interface{}
+}
+
+func (s SimpleJsonMarshaler) MarshalJSON() ([]byte, error) {
+	return json.Marshal(s.v)
 }
