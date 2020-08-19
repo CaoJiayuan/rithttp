@@ -10,9 +10,7 @@ import (
 type ConfigInterceptor func(client *http.Client)
 type RequestInterceptor func(req *http.Request)
 
-var (
-	version = "0.0.1"
-)
+const version = "0.0.1"
 
 func UserAgent() string {
 	return "RithHttp/" + version + " (" + runtime.Version() + ")"
