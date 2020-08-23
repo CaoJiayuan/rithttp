@@ -110,7 +110,7 @@ func (h *Holder) wait() {
 }
 
 func (h *Holder) GetResponse() *HttpResponse {
-	h.wait()
+	h.do().wait()
 	return h.response
 }
 
