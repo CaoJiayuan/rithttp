@@ -1,1 +1,1 @@
-# Http Client for golang
+# Archived migrate to [https://github.com/enorith/httpclient]https://github.com/enorith/httpclient
